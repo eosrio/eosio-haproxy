@@ -34,7 +34,7 @@ sudo mkdir -p /etc/haproxy
 sudo nano /etc/haproxy/haproxy.cfg
 ```
 
-Example configuration:
+Example configuration (section order matters):
 ```
 global
 	# global connection limit
