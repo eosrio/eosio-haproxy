@@ -1,4 +1,4 @@
-# eosio-haproxy
+# EOSIO HAProxy Guide
 
 Configuration guide for HAProxy v2.3 including http and p2p load-balancing, access control and health checks
 
