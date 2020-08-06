@@ -37,27 +37,31 @@ sudo nano /etc/haproxy/haproxy.cfg
 Example configuration:
 ```
 global
+	# global connection limit
 	maxconn		50000
 	# sends logs to stdout
 	log		stdout format raw local0 info
+	# number of threads
 	nbthread	2
 
-# defaults must be set prior to sections using them
+# ------- HTTP Section ---------
+
+# defaults must be set prior to sections using them (can be redefined later)
 defaults
 	log global
 	mode http
-	timeout connect 5s
-        timeout client 10s
-        timeout server 10s
+	timeout connect 2s
+        timeout client 5s
+        timeout server 5s
 
-# expose route with stats
+# expose route with stats (optional, but recommended)
 listen stats
-	bind		*:9090
+	bind		127.0.0.1:9090
 	stats		enable
 	stats		uri /monitor
 	stats		refresh 5s
 
-# http api listener
+# http api listener (endpoint where external users will connect)
 frontend http-in
 	bind			*:18888
 	option			httplog
@@ -70,20 +74,27 @@ frontend http-in
 	http-request		deny if blacklist OR !whitelist
 
 
-# http backend with multiple nodeos
+# http backend with multiple nodeos (chain_api_plugin)
 backend nodeos-http-api
+	# load balacing mode (roundrobin,leastconn,first,random,etc...)
 	balance		leastconn
+	# define the path and method for healthcheck
 	option		httpchk GET /v1/chain/get_info HTTP/1.1
-	http-check	send hdr Host your.domain.com
+	# http 1.1 requires defining a Host
+	http-check	send hdr Host eosrio.io
+	# add default options for all servers
 	default-server	check
+	# define member servers
 	server		node1 127.0.0.1:28888
 	server		node2 127.0.0.1:38888
 
+# ------ TCP Section -----------
 
 # redefine defaults for tcp mode
 defaults
 	log		global
 	mode		tcp
+	# different timeouts can be defined here
 	timeout		connect 5s
 	timeout		client	10s
 	timeout		server	10s
@@ -98,11 +109,46 @@ frontend p2p-in
 backend nodeos-p2p-nodes
 	balance		leastconn
 	option          httpchk GET /v1/chain/get_info HTTP/1.1
-	http-check      send hdr Host your.domain.com
+	http-check      send hdr Host eosrio.io
 	default-server	maxconn 64
-	# specify peering servers with http ports used for health check
+	# specify peering servers with http ports used for health checking (they must have the chain_api_plugin enabled)
 	server		peer1		127.0.0.1:29876 check port 28888
 	server		peer2		127.0.0.1:39876 check port 38888
 
 ```
 
+#### 5. Validating the configuration
+```bash
+sudo haproxy -c -f /etc/haproxy/haproxy.cfg
+```
+A `Configuration file is valid` is expected.
+
+#### 6. Starting
+```bash
+sudo haproxy -f /etc/haproxy/haproxy.cfg
+```
+
+#### Extra: Basic nodeos config.ini for this example
+```
+# Node 1
+http-server-address = 127.0.0.1:28888
+plugin = eosio::chain_api_plugin
+http-validate-host = false
+
+p2p-listen-endpoint = 127.0.0.1:29876
+p2p-server-address = 127.0.0.1:29876
+# connect to the other local node
+p2p-peer-address = 127.0.0.1:39876
+```
+
+```
+# Node 2
+http-server-address = 127.0.0.1:38888
+plugin = eosio::chain_api_plugin
+http-validate-host = false
+
+p2p-listen-endpoint = 127.0.0.1:39876
+p2p-server-address = 127.0.0.1:39876
+# connect to the other local node
+p2p-peer-address = 127.0.0.1:29876
+```
